@@ -59,12 +59,43 @@ exports.getAllCategories = async (req, res) => {
 };
 
 exports.updateCategory = async (req, res) => {
-  const updated = await Category.findByIdAndUpdate(
-    req.params.id,
-    { $set: req.body },
-    { new: true }
-  );
-  res.json(updated);
+  try {
+    const { name } = req.body || {};
+    const { id } = req.params;
+
+    if (!name) {
+      return res.status(400).json({
+        success: false,
+        message: "Name is required",
+      });
+    }
+
+    const updated = await Category.findByIdAndUpdate(
+      id,
+      { $set: { name } },
+      { new: true, runValidators: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({
+        success: false,
+        message: "Category not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Category updated successfully",
+      category: updated,
+    });
+  } catch (error) {
+    console.error("Error updating category:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
 };
 
 exports.deleteCategory = async (req, res) => {
