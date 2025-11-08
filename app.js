@@ -45,30 +45,8 @@ app.use(cors({
   optionsSuccessStatus: 204
 }));
 
-// Handle preflight requests explicitly for all routes
-app.options('*', (req, res) => {
-  const origin = req.headers.origin;
-  
-  // When credentials: true, we must use the actual origin, not '*'
-  // Check if origin is allowed or allow all in development
-  if (!origin || allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
-    // Use the actual origin if present, otherwise allow (for non-browser requests)
-    if (origin) {
-      res.header('Access-Control-Allow-Origin', origin);
-    } else {
-      res.header('Access-Control-Allow-Origin', '*');
-    }
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Range, X-Requested-With, Accept');
-    if (origin) {
-      res.header('Access-Control-Allow-Credentials', 'true');
-    }
-    res.header('Access-Control-Max-Age', '86400'); // 24 hours
-    res.sendStatus(204);
-  } else {
-    res.sendStatus(403);
-  }
-});
+// CORS middleware handles preflight requests automatically
+// No need for explicit app.options('*') handler
 
 // Request logging middleware
 app.use((req, res, next) => {
