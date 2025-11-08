@@ -17,7 +17,8 @@ const videoPriceSchema = new Schema({
   },
   description: {
     type: String,
-    required: true
+    required: false,
+    default: ''
   },
   sponsorLogo:{type: String},
   sponsorText:{type: String},

@@ -3,18 +3,34 @@ const SubCategory = require("../../models/Admin/SubCategory");
 
 exports.createCategory = async (req, res) => {
   try {
+    console.log("Create category - req.body:", req.body);
     const { name } = req.body || {};
 
-    if (!name) {
+    if (!name || !name.trim()) {
       return res.status(400).json({
         success: false,
         message: "Name is required",
       });
     }
 
-    const category = await Category.create({
-      name
-    });
+    const trimmedName = name.trim();
+    
+    // Check if category with same name already exists
+    const existingCategory = await Category.findOne({ name: trimmedName });
+    if (existingCategory) {
+      return res.status(400).json({
+        success: false,
+        message: "Category with this name already exists",
+      });
+    }
+
+    // Create category with only name field
+    const categoryData = {
+      name: trimmedName
+    };
+    
+    console.log("Creating category with data:", categoryData);
+    const category = await Category.create(categoryData);
 
     res.status(201).json({
       success: true,
@@ -23,10 +39,12 @@ exports.createCategory = async (req, res) => {
     });
   } catch (error) {
     console.error("Error creating category:", error);
+    console.error("Error stack:", error.stack);
     res.status(500).json({
       success: false,
       message: "Internal server error",
       error: error.message,
+      details: error.errors || null,
     });
   }
 };
@@ -60,19 +78,35 @@ exports.getAllCategories = async (req, res) => {
 
 exports.updateCategory = async (req, res) => {
   try {
+    console.log("Update category - req.body:", req.body);
+    console.log("Update category - req.params:", req.params);
     const { name } = req.body || {};
     const { id } = req.params;
 
-    if (!name) {
+    if (!name || !name.trim()) {
       return res.status(400).json({
         success: false,
         message: "Name is required",
       });
     }
 
+    const trimmedName = name.trim();
+
+    // Check if another category with same name exists
+    const existingCategory = await Category.findOne({ 
+      name: trimmedName,
+      _id: { $ne: id }
+    });
+    if (existingCategory) {
+      return res.status(400).json({
+        success: false,
+        message: "Category with this name already exists",
+      });
+    }
+
     const updated = await Category.findByIdAndUpdate(
       id,
-      { $set: { name } },
+      { $set: { name: trimmedName } },
       { new: true, runValidators: true }
     );
 
@@ -90,10 +124,12 @@ exports.updateCategory = async (req, res) => {
     });
   } catch (error) {
     console.error("Error updating category:", error);
+    console.error("Error stack:", error.stack);
     res.status(500).json({
       success: false,
       message: "Internal server error",
       error: error.message,
+      details: error.errors || null,
     });
   }
 };
