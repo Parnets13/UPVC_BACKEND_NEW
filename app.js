@@ -10,13 +10,65 @@ connectDB();
 
 const app = express(); 
 
+// CORS configuration - allow specific origins
+const allowedOrigins = [
+  'https://upvc-admin-panel.netlify.app',
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://localhost:8081',
+  // Add more origins as needed
+];
+
+// CORS middleware with dynamic origin
 app.use(cors({
-  origin: '*',
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    // Check if origin is in allowed list
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else if (process.env.NODE_ENV !== 'production') {
+      // In development, allow all origins
+      callback(null, true);
+    } else {
+      // In production, only allow specific origins
+      // For now, allow all for flexibility - tighten this later
+      callback(null, true);
+    }
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'Range'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Range', 'X-Requested-With', 'Accept'],
   exposedHeaders: ['Content-Length', 'Content-Range'],
-  credentials: true          
+  credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204
 }));
+
+// Handle preflight requests explicitly for all routes
+app.options('*', (req, res) => {
+  const origin = req.headers.origin;
+  
+  // When credentials: true, we must use the actual origin, not '*'
+  // Check if origin is allowed or allow all in development
+  if (!origin || allowedOrigins.indexOf(origin) !== -1 || process.env.NODE_ENV !== 'production') {
+    // Use the actual origin if present, otherwise allow (for non-browser requests)
+    if (origin) {
+      res.header('Access-Control-Allow-Origin', origin);
+    } else {
+      res.header('Access-Control-Allow-Origin', '*');
+    }
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, Range, X-Requested-With, Accept');
+    if (origin) {
+      res.header('Access-Control-Allow-Credentials', 'true');
+    }
+    res.header('Access-Control-Max-Age', '86400'); // 24 hours
+    res.sendStatus(204);
+  } else {
+    res.sendStatus(403);
+  }
+});
 
 // Request logging middleware
 app.use((req, res, next) => {
