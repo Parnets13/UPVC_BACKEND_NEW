@@ -3,47 +3,156 @@ const User = require('../../models/Buyer/User');
 const generateOTP = require('../../utils/generateOTP');
 const { signOTPToken } = require('../../utils/jwtHelper');
 
+// Register new buyer
+exports.register = async (req, res) => {
+  try {
+    const { name, email, password, mobileNumber } = req.body;
+
+    // Validation
+    if (!name || !name.trim()) {
+      return res.status(400).json({ message: 'Name is required' });
+    }
+    if (!email || !email.trim()) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+    if (!password || password.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters' });
+    }
+    if (!mobileNumber || mobileNumber.length !== 10) {
+      return res.status(400).json({ message: 'Valid 10-digit mobile number is required' });
+    }
+
+    // Check if user already exists
+    const existingUser = await User.findOne({
+      $or: [
+        { email: email.trim().toLowerCase() },
+        { mobileNumber }
+      ]
+    });
+
+    if (existingUser) {
+      if (existingUser.email === email.trim().toLowerCase()) {
+        return res.status(400).json({ message: 'Email already registered' });
+      }
+      if (existingUser.mobileNumber === mobileNumber) {
+        return res.status(400).json({ message: 'Mobile number already registered' });
+      }
+    }
+
+    // Create new user
+    const user = new User({
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      password,
+      mobileNumber
+    });
+
+    await user.save();
+
+    // Generate token
+    const token = signOTPToken({ 
+      mobileNumber, 
+      userId: user._id 
+    });
+
+    return res.status(201).json({
+      message: 'Registration successful',
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        mobileNumber: user.mobileNumber
+      }
+    });
+  } catch (error) {
+    console.error('Registration error:', error);
+    if (error.code === 11000) {
+      // Duplicate key error
+      if (error.keyPattern?.email) {
+        return res.status(400).json({ message: 'Email already registered' });
+      }
+      if (error.keyPattern?.mobileNumber) {
+        return res.status(400).json({ message: 'Mobile number already registered' });
+      }
+    }
+    return res.status(500).json({ 
+      message: 'Internal server error',
+      error: error.message 
+    });
+  }
+};
+
 exports.login = async (req, res) => {
   try {
-    console.log("=== LOGIN REQUEST RECEIVED ===");
-    console.log("Request body:", req.body);
-    console.log("Request headers:", req.headers);
-    
-    const { mobileNumber } = req.body;
-    console.log("Mobile number received:", mobileNumber);
-    
+    const { mobileNumber, password, email } = req.body;
+
+    // Check if password-based login
+    if (password) {
+      // Password-based login
+      let user;
+      if (email) {
+        user = await User.findOne({ email: email.trim().toLowerCase() });
+      } else if (mobileNumber) {
+        user = await User.findOne({ mobileNumber });
+      } else {
+        return res.status(400).json({ message: 'Email or mobile number is required' });
+      }
+
+      if (!user) {
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
+
+      if (!user.password) {
+        return res.status(401).json({ message: 'Password not set. Please use OTP login or register first.' });
+      }
+
+      const isPasswordValid = await user.comparePassword(password);
+      if (!isPasswordValid) {
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
+
+      // Generate token
+      const token = signOTPToken({ 
+        mobileNumber: user.mobileNumber, 
+        userId: user._id 
+      });
+
+      return res.status(200).json({
+        message: 'Login successful',
+        token,
+        user: {
+          id: user._id,
+          name: user.name || '',
+          email: user.email || '',
+          mobileNumber: user.mobileNumber
+        }
+      });
+    }
+
+    // OTP-based login (existing flow)
     if (!mobileNumber || mobileNumber.length !== 10) {
-      console.log("Invalid mobile number:", mobileNumber);
       return res.status(400).json({ message: 'Invalid mobile number' });
     }
 
-    console.log("Generating OTP...");
     const otp = generateOTP();
     const otpExpires = new Date(Date.now() + 5 * 60 * 1000); // expires in 5 min
-    console.log("OTP generated:", otp);
 
-    console.log("Updating/creating user in database...");
     const user = await User.findOneAndUpdate(
       { mobileNumber },
       { otp, otpExpires },
       { new: true, upsert: true }
     );
-    console.log("User found/created:", user._id);
 
-    console.log("Generating JWT token...");
     const token = signOTPToken({ mobileNumber, userId: user._id });
-    console.log("Token generated successfully");
 
-    console.log("=== SENDING SUCCESS RESPONSE ===");
     return res.status(200).json({
       message: 'OTP sent',
       otp,
       token
     });
   } catch (error) {
-    console.log("=== LOGIN ERROR ===");
-    console.log("Error message:", error.message);
-    console.log("Error stack:", error.stack);
+    console.error('Login error:', error);
     return res.status(500).json({ 
       message: 'Internal server error',
       error: error.message 

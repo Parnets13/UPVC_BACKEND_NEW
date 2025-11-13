@@ -1,9 +1,10 @@
 const express = require('express');
-const { login, verifyOTP , buyerInfo , updateUser , getBuyerLeads} = require('../../controllers/Buyer/authController');
+const { register, login, verifyOTP , buyerInfo , updateUser , getBuyerLeads} = require('../../controllers/Buyer/authController');
 const { authenticate } = require('../../middlewares/authMiddleware');
 const router = express.Router();
 // const { login, verifyOTP } = require('../controllers/authController');
 
+router.post('/register', register);
 router.post('/login', login);
 router.post('/verify-otp', verifyOTP);
 router.get('/', authenticate, buyerInfo);

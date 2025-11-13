@@ -11,3 +11,5 @@ router.delete('/buyers/:buyerId', buyerController.deleteBuyer);
 module.exports = router;
 
 
+
+

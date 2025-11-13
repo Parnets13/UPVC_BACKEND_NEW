@@ -43,4 +43,7 @@ router.delete('/:id', advertisementController.deleteAdvertisement);
 // Toggle like on advertisement
 router.post('/:id/like', advertisementController.toggleLike);
 
+// Check file integrity
+router.get('/:id/check-integrity', advertisementController.checkFileIntegrity);
+
 module.exports = router;
