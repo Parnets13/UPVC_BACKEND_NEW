@@ -32,8 +32,7 @@ app.use(cors({
       // In development, allow all origins
       callback(null, true);
     } else {
-      // In production, only allow specific origins
-      // For now, allow all for flexibility - tighten this later
+      // In production, allow all origins for now (can be tightened later)
       callback(null, true);
     }
   },
@@ -42,7 +41,8 @@ app.use(cors({
   exposedHeaders: ['Content-Length', 'Content-Range'],
   credentials: true,
   preflightContinue: false,
-  optionsSuccessStatus: 204
+  optionsSuccessStatus: 204,
+  maxAge: 86400 // Cache preflight requests for 24 hours
 }));
 
 // CORS middleware handles preflight requests automatically
@@ -59,10 +59,12 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json());  
-app.use(express.urlencoded({ extended: true })); 
+// Increase body parser limits for large file uploads (videos can be large)
+app.use(express.json({ limit: '200mb' }));  
+app.use(express.urlencoded({ extended: true, limit: '200mb' })); 
 
-// Serve static files from the 'public' directory
+// Serve static files from the 'uploads' directory
+// Makes uploaded files accessible via URL like: http://yourserver/uploads/filename.jpg
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
  
 app.use((req, res, next) => {

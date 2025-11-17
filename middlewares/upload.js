@@ -76,11 +76,16 @@ const upload = (folder, allowedTypes = defaultAllowedTypes) => {
     }
   };
 
+  // Special handling for advertisements folder (can contain videos)
+  const fileSizeLimit = folder === 'advertisements' 
+    ? 200 * 1024 * 1024 // 200MB for advertisements (videos)
+    : 100 * 1024 * 1024; // 100MB for other uploads
+
   return multer({
     storage,
     // fileFilter,
     limits: {
-      fileSize: 100 * 1024 * 1024 // 100MB limit
+      fileSize: fileSizeLimit
     }
   });
 };
