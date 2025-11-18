@@ -9,8 +9,8 @@ const defaultAllowedTypes = ['image/', 'video/', 'application/pdf'];
 // Video-specific configuration
 const videoConfig = {
   allowedTypes: ['video/mp4', 'video/webm', 'video/ogg'],
-  // Increase max upload size for videos (e.g., 200MB)
-  maxSize: 200 * 1024 * 1024,
+  // Increase max upload size for videos (1GB)
+  maxSize: 1024 * 1024 * 1024,
   destination: 'uploads/sellers/videos'
 };
 
@@ -78,7 +78,7 @@ const upload = (folder, allowedTypes = defaultAllowedTypes) => {
 
   // Special handling for advertisements folder (can contain videos)
   const fileSizeLimit = folder === 'advertisements' 
-    ? 200 * 1024 * 1024 // 200MB for advertisements (videos)
+    ? 1024 * 1024 * 1024 // 1GB for advertisements (videos)
     : 100 * 1024 * 1024; // 100MB for other uploads
 
   return multer({

@@ -60,12 +60,21 @@ app.use((req, res, next) => {
 });
 
 // Increase body parser limits for large file uploads (videos can be large)
-app.use(express.json({ limit: '200mb' }));  
-app.use(express.urlencoded({ extended: true, limit: '200mb' })); 
+app.use(express.json({ limit: '1gb' }));  
+app.use(express.urlencoded({ extended: true, limit: '1gb' })); 
 
 // Serve static files from the 'uploads' directory
 // Makes uploaded files accessible via URL like: http://yourserver/uploads/filename.jpg
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// Set options to properly handle range requests for video streaming
+app.use('/uploads', express.static(path.join(__dirname, 'uploads'), {
+  setHeaders: (res, filePath) => {
+    // Enable range requests for video files
+    if (filePath.endsWith('.mp4') || filePath.endsWith('.webm') || filePath.endsWith('.ogg')) {
+      res.setHeader('Accept-Ranges', 'bytes');
+      res.setHeader('Content-Type', 'video/mp4');
+    }
+  }
+}));
  
 app.use((req, res, next) => {
   console.log(`${req.method} ${req.originalUrl}`);

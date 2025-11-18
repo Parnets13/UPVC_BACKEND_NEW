@@ -62,16 +62,47 @@ const mongoose = require('mongoose');
 
 exports.createLead = async (req, res) => {
   try {
+    console.log('=== createLead API Called ===');
+    console.log('Request body:', JSON.stringify(req.body, null, 2));
+    console.log('User from token:', req.user?._id);
+
     const { quotes, contactInfo, projectInfo, categoryId } = req.body;
+
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Authentication required. Please login.' 
+      });
+    }
 
     const buyer = await User.findById(req.user._id);
     if (!buyer) {
+      console.log('Buyer not found for ID:', req.user._id);
       return res.status(404).json({ success: false, message: 'Buyer not found' });
+    }
+
+    console.log('Buyer found:', buyer.name || buyer.mobileNumber);
+
+    if (!categoryId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Category ID is required' 
+      });
     }
 
     const category = await Category.findById(categoryId);
     if (!category) {
+      console.log('Category not found for ID:', categoryId);
       return res.status(404).json({ success: false, message: 'Category not found' });
+    }
+
+    console.log('Category found:', category.name);
+
+    if (!quotes || !Array.isArray(quotes) || quotes.length === 0) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'At least one quote is required' 
+      });
     }
 
     let totalSqft = 0;
@@ -80,9 +111,18 @@ exports.createLead = async (req, res) => {
     const validatedQuotes = [];
 
     for (const quote of quotes) {
-      console.log("quote : " , quote)
+      console.log("Processing quote:", quote);
+      
+      if (!quote.product) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Product ID is required for each quote' 
+        });
+      }
+
       const product = await WindowSubOption.findById(quote.product);
       if (!product) {
+        console.log('Product not found for ID:', quote.product);
         return res.status(404).json({ 
           success: false, 
           message: `Product not found for ID: ${quote.product}` 
@@ -98,27 +138,71 @@ exports.createLead = async (req, res) => {
         });
       }
 
-      const sqft = height * width;
+      // Calculate sqft - use provided sqft or calculate from height/width
+      // Frontend sends height/width in feet, so calculation is: height * width
+      const sqft = quote.sqft || (height * width);
       const quoteSqftTotal = sqft * quantity;
 
       totalSqft += quoteSqftTotal;
       totalQuantity += quantity;
 
       validatedQuotes.push({
-        ...quote,
-        sqft,
+        productType: quote.productType,
+        product: quote.product,
+        color: quote.color,
+        installationLocation: quote.installationLocation,
+        height: height,
+        width: width,
+        quantity: quantity,
+        remark: quote.remark || '',
+        sqft: sqft,
+        isGenerated: quote.isGenerated !== undefined ? quote.isGenerated : true
       });
     }
 
-    const bulkOps = quotes.map(q => ({
-      updateOne: {
-        filter: { _id: q._id },
-        update: { $set: { isGenerated: q.isGenerated } }
+    console.log('Total Sqft calculated:', totalSqft);
+    console.log('Total Quantity:', totalQuantity);
+
+    // Update quotes in database if they have _id (existing quotes)
+    if (quotes.some(q => q._id)) {
+      const bulkOps = quotes
+        .filter(q => q._id) // Only update quotes that have _id
+        .map(q => ({
+          updateOne: {
+            filter: { _id: q._id, buyer: req.user._id }, // Also verify buyer owns the quote
+            update: { $set: { isGenerated: q.isGenerated !== undefined ? q.isGenerated : true } }
+          }
+        }));
+      
+      if (bulkOps.length > 0) {
+        console.log("Updating quotes:", bulkOps.length);
+        try {
+          await Quote.bulkWrite(bulkOps);
+        } catch (error) {
+          console.error('Error updating quotes:', error);
+          // Don't fail the lead creation if quote update fails
+        }
       }
-    }));
-    console.log("bulkOps : " , bulkOps)
-    // Execute all updates at once
-    await Quote.bulkWrite(bulkOps);
+    }
+
+    // Calculate dynamic slots and pricing
+    const basePricePerSqft = 10.50;
+    const baseValue = totalSqft * basePricePerSqft;
+    const targetProfit = 6250;
+    
+    let maxSlots, dynamicSlotPrice, overProfit;
+    
+    if (baseValue * 6 > targetProfit) {
+      // Calculate optimal slots to keep near target profit
+      maxSlots = Math.max(1, Math.floor(targetProfit / baseValue));
+      dynamicSlotPrice = targetProfit / maxSlots;
+      overProfit = true;
+    } else {
+      // For smaller leads, keep 6 slots
+      maxSlots = 6;
+      dynamicSlotPrice = baseValue;
+      overProfit = false;
+    }
 
     const lead = new Lead({
       buyer: req.user._id,
@@ -129,10 +213,26 @@ exports.createLead = async (req, res) => {
       totalSqft,
       totalQuantity,
       pricePerSqft: 10.5,
+      basePricePerSqft: basePricePerSqft,
+      availableSlots: maxSlots,
+      maxSlots: maxSlots,
+      dynamicSlotPrice: dynamicSlotPrice,
+      overProfit: overProfit,
       // pricePerSqft: totalSqft > 0 ? 6250 / (totalSqft * 6) : 0,
     });
 
     await lead.save();
+
+    console.log('\n✅ Lead Created Successfully!');
+    console.log('Lead ID:', lead._id);
+    console.log('Buyer:', buyer.name || buyer.mobileNumber);
+    console.log('Total Sqft:', totalSqft);
+    console.log('Available Slots:', lead.availableSlots);
+    console.log('Max Slots:', lead.maxSlots);
+    console.log('Dynamic Slot Price:', lead.dynamicSlotPrice);
+    console.log('Status:', lead.status);
+    console.log('Created At:', lead.createdAt);
+    console.log('========================================\n');
 
     res.status(201).json({
       success: true,
@@ -141,7 +241,9 @@ exports.createLead = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error creating lead:', error);
+    console.error('\n❌ Error creating lead:', error);
+    console.error('Error stack:', error.stack);
+    console.error('========================================\n');
     res.status(500).json({
       success: false,
       message: 'Internal server error',
@@ -153,7 +255,7 @@ exports.createLead = async (req, res) => {
 // Get all leads with filters
 exports.getAllLeads = async (req, res) => {
   try {
-    const { status, buyerId, sellerId, categoryId, page = 1, limit = 10 } = req.query;
+    const { status, buyerId, sellerId, categoryId, page = 1, limit = 100 } = req.query;
     const filter = {};
 
     // Valid status values
@@ -177,7 +279,12 @@ exports.getAllLeads = async (req, res) => {
     if (sellerId) filter['seller.sellerId'] = sellerId;
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const pageSize = Math.max(1, Math.min(100, parseInt(limit, 10) || 10));
+    const pageSize = Math.max(1, Math.min(100, parseInt(limit, 10) || 100));
+
+    // Log the filter for debugging
+    console.log('=== getAllLeads API Call ===');
+    console.log('Filter:', JSON.stringify(filter, null, 2));
+    console.log('Page:', pageNum, 'Limit:', pageSize);
 
     // Use lean() to avoid validation errors on invalid status values
     // We'll filter and normalize statuses in the results
@@ -193,6 +300,19 @@ exports.getAllLeads = async (req, res) => {
         .limit(pageSize)
         .lean(), // Use lean() to get plain objects and avoid validation errors
     ]);
+
+    // Log results for debugging
+    console.log('Total leads found:', total);
+    console.log('Leads returned:', leads.length);
+    if (leads.length > 0) {
+      console.log('Sample lead:', {
+        id: leads[0]._id,
+        availableSlots: leads[0].availableSlots,
+        status: leads[0].status,
+        createdAt: leads[0].createdAt,
+        totalSqft: leads[0].totalSqft
+      });
+    }
 
     // Normalize status values in the results
     const normalizedLeads = leads.map(lead => {

@@ -1,6 +1,7 @@
 const UpvcHomepage = require('../../models/Admin/Homepage');
 const fs = require('fs');
 const path = require('path');
+const { transcodeVideoIfNeeded } = require('../../utils/videoTranscoder');
 
 // Helper to generate file URL
 const getFileUrl = (file, req) => {
@@ -54,15 +55,41 @@ exports.createHomepage = async (req, res) => {
       });
     }
 
-    // Normalize file paths
-    const videoPath = normalizeFilePath(videoFile.path);
+    // Transcode video to mobile-compatible format
+    const originalVideoPath = videoFile.path;
+    const transcodedVideoPath = originalVideoPath.replace(/\.(mp4|webm|ogg)$/i, '_mobile.mp4');
+    
+    console.log('[createHomepage] Transcoding video for mobile compatibility...');
+    const transcodeResult = await transcodeVideoIfNeeded(originalVideoPath, transcodedVideoPath);
+    
+    let finalVideoPath;
+    if (transcodeResult.success && transcodeResult.transcoded) {
+      // Use transcoded video
+      finalVideoPath = normalizeFilePath(transcodeResult.outputPath);
+      // Delete original video to save space
+      if (fs.existsSync(originalVideoPath)) {
+        try {
+          fs.unlinkSync(originalVideoPath);
+          console.log('[createHomepage] Original video deleted after transcoding');
+        } catch (err) {
+          console.warn('[createHomepage] Could not delete original video:', err.message);
+        }
+      }
+    } else {
+      // Use original video if transcoding failed or not needed
+      finalVideoPath = normalizeFilePath(originalVideoPath);
+      if (transcodeResult.error) {
+        console.warn('[createHomepage] Transcoding failed, using original video:', transcodeResult.error);
+      }
+    }
+
     const sponsorLogoPath = sponsorLogoFile ? normalizeFilePath(sponsorLogoFile.path) : null;
 
     const homepageData = {
       title: title || 'Homepage Title',
       subtitle: subtitle || 'Homepage Subtitle',
       updatedAt: Date.now(),
-      videoUrl: videoPath,
+      videoUrl: finalVideoPath,
       sponsorLogo: sponsorLogoPath,
       sponsorText: sponsorText || ''
     };
@@ -123,8 +150,46 @@ exports.updateHomepage = async (req, res) => {
         if (fs.existsSync(oldPath)) {
           fs.unlinkSync(oldPath);
         }
+        // Also delete old mobile version if it exists
+        const oldMobilePath = oldPath.replace(/\.(mp4|webm|ogg)$/i, '_mobile.mp4');
+        if (fs.existsSync(oldMobilePath)) {
+          try {
+            fs.unlinkSync(oldMobilePath);
+          } catch (err) {
+            // Ignore errors
+          }
+        }
       }
-      updateData.videoUrl = normalizeFilePath(videoFile.path);
+
+      // Transcode video to mobile-compatible format
+      const originalVideoPath = videoFile.path;
+      const transcodedVideoPath = originalVideoPath.replace(/\.(mp4|webm|ogg)$/i, '_mobile.mp4');
+      
+      console.log('[updateHomepage] Transcoding video for mobile compatibility...');
+      const transcodeResult = await transcodeVideoIfNeeded(originalVideoPath, transcodedVideoPath);
+      
+      let finalVideoPath;
+      if (transcodeResult.success && transcodeResult.transcoded) {
+        // Use transcoded video
+        finalVideoPath = normalizeFilePath(transcodeResult.outputPath);
+        // Delete original video to save space
+        if (fs.existsSync(originalVideoPath)) {
+          try {
+            fs.unlinkSync(originalVideoPath);
+            console.log('[updateHomepage] Original video deleted after transcoding');
+          } catch (err) {
+            console.warn('[updateHomepage] Could not delete original video:', err.message);
+          }
+        }
+      } else {
+        // Use original video if transcoding failed or not needed
+        finalVideoPath = normalizeFilePath(originalVideoPath);
+        if (transcodeResult.error) {
+          console.warn('[updateHomepage] Transcoding failed, using original video:', transcodeResult.error);
+        }
+      }
+
+      updateData.videoUrl = finalVideoPath;
     }
 
     // Handle sponsor logo replacement
@@ -175,6 +240,9 @@ exports.getContent = async (req, res) => {
 
 // ========== ADD Key Moment ==========
 exports.addKeyMoment = async (req, res) => {
+  console.log('[addKeyMoment] Controller called');
+  console.log('[addKeyMoment] req.body:', req.body);
+  console.log('[addKeyMoment] req.file:', req.file);
   try {
     const { title, timestamp } = req.body;
     const thumbnailFile = req.file;
@@ -186,14 +254,19 @@ exports.addKeyMoment = async (req, res) => {
       });
     }
 
+    // Normalize thumbnail path
+    const thumbnailPath = normalizeFilePath(thumbnailFile.path);
+    
     const newMoment = {
       title,
       timestamp,
-      // thumbnail: getFileUrl(thumbnailFile, req)
-      thumbnail: thumbnailFile.path
+      thumbnail: thumbnailPath
     };
 
-    const updated = await UpvcHomepage.findOneAndUpdate(
+    console.log('[addKeyMoment] New moment data:', newMoment);
+
+    // Try to update existing homepage, or create one if it doesn't exist
+    let updated = await UpvcHomepage.findOneAndUpdate(
       {},
       {
         $push: { keyMoments: newMoment },
@@ -202,12 +275,49 @@ exports.addKeyMoment = async (req, res) => {
       { new: true, runValidators: true }
     );
 
+    // If no homepage exists, create one with the key moment
     if (!updated) {
-      fs.unlinkSync(thumbnailFile.path);
-      return res.status(404).json({
-        success: false,
-        message: 'No homepage content found to update'
+      console.log('[addKeyMoment] No homepage found, creating new one with key moment');
+      
+      // Create a placeholder video file path that's valid
+      const placeholderVideoPath = 'uploads/advertisements/placeholder.mp4';
+      
+      // Ensure the directory exists
+      const placeholderDir = path.join(__dirname, '..', '..', 'uploads', 'advertisements');
+      if (!fs.existsSync(placeholderDir)) {
+        fs.mkdirSync(placeholderDir, { recursive: true });
+      }
+      
+      // Create an empty placeholder file if it doesn't exist
+      const placeholderFullPath = path.join(__dirname, '..', '..', placeholderVideoPath);
+      if (!fs.existsSync(placeholderFullPath)) {
+        fs.writeFileSync(placeholderFullPath, '');
+      }
+      
+      const newHomepage = new UpvcHomepage({
+        title: 'Homepage Title',
+        subtitle: 'Homepage Subtitle',
+        videoUrl: placeholderVideoPath, // Valid path that exists
+        keyMoments: [newMoment],
+        updatedAt: Date.now()
       });
+      
+      try {
+        updated = await newHomepage.save();
+        console.log('[addKeyMoment] New homepage created successfully');
+      } catch (saveError) {
+        console.error('[addKeyMoment] Error saving new homepage:', saveError);
+        console.error('[addKeyMoment] Validation errors:', saveError.errors);
+        // Clean up uploaded file if save fails
+        if (thumbnailFile && thumbnailFile.path) {
+          try {
+            fs.unlinkSync(thumbnailFile.path);
+          } catch (unlinkError) {
+            console.error('[addKeyMoment] Error deleting file:', unlinkError);
+          }
+        }
+        throw saveError; // Re-throw to be caught by outer catch
+      }
     }
 
     res.status(200).json({
@@ -216,9 +326,29 @@ exports.addKeyMoment = async (req, res) => {
       data: updated
     });
   } catch (error) {
-    if (req.file) fs.unlinkSync(req.file.path);
+    // Clean up uploaded file on error
+    if (req.file && req.file.path) {
+      try {
+        fs.unlinkSync(req.file.path);
+        console.log('[addKeyMoment] Cleaned up uploaded file due to error');
+      } catch (unlinkError) {
+        console.error('[addKeyMoment] Error deleting file:', unlinkError);
+      }
+    }
     console.error('Error in addKeyMoment:', error);
-    res.status(500).json({ success: false, message: 'Server error', error: error.message });
+    console.error('Error stack:', error.stack);
+    console.error('Error details:', {
+      message: error.message,
+      name: error.name,
+      code: error.code,
+      errors: error.errors
+    });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error', 
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 };
 
@@ -246,10 +376,19 @@ exports.updateKeyMoment = async (req, res) => {
     };
 
     if (thumbnailFile) {
-      const oldThumbnailPath = path.join('uploads', existingMoment.thumbnail.split('/').pop());
-      if (fs.existsSync(oldThumbnailPath)) fs.unlinkSync(oldThumbnailPath);
-      // updateData['keyMoments.$.thumbnail'] = getFileUrl(thumbnailFile.path, req);
-      updateData['keyMoments.$.thumbnail'] = thumbnailFile.path
+      // Delete old thumbnail if it exists
+      if (existingMoment.thumbnail) {
+        const oldThumbnailFullPath = path.join(__dirname, '..', '..', existingMoment.thumbnail);
+        if (fs.existsSync(oldThumbnailFullPath)) {
+          try {
+            fs.unlinkSync(oldThumbnailFullPath);
+          } catch (unlinkError) {
+            console.error('[updateKeyMoment] Error deleting old thumbnail:', unlinkError);
+          }
+        }
+      }
+      // Normalize and set new thumbnail path
+      updateData['keyMoments.$.thumbnail'] = normalizeFilePath(thumbnailFile.path);
     }
 
     const updated = await UpvcHomepage.findOneAndUpdate(
