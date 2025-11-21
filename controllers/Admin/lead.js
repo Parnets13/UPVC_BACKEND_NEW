@@ -6,6 +6,12 @@ const Category = require('../../models/Admin/Category');
 const Quote = require('../../models/Buyer/Quote');
 const mongoose = require('mongoose');
 
+// Log that this file is loaded
+console.log('\n✅✅✅ Lead Controller File Loaded ✅✅✅');
+console.log('📁 File: controllers/Admin/lead.js');
+console.log('⏰ Loaded at:', new Date().toISOString());
+console.log('========================================\n');
+
 // Create a new lead
 // exports.createLead = async (req, res) => {
 //   try {
@@ -61,27 +67,38 @@ const mongoose = require('mongoose');
 // };
 
 exports.createLead = async (req, res) => {
+  // IMMEDIATE LOG - This will definitely show up
+  console.log('\n');
+  console.log('========================================');
+  console.log('🚀🚀🚀 [BUYER BACKEND] createLead FUNCTION CALLED 🚀🚀🚀');
+  console.log('========================================');
+  console.log('📅 Timestamp:', new Date().toISOString());
+  console.log('👤 User from token:', req.user?._id);
+  console.log('📦 Request body:', JSON.stringify(req.body, null, 2));
+  console.log('📋 Request headers:', JSON.stringify(req.headers, null, 2));
+  
   try {
-    console.log('=== createLead API Called ===');
-    console.log('Request body:', JSON.stringify(req.body, null, 2));
-    console.log('User from token:', req.user?._id);
 
     const { quotes, contactInfo, projectInfo, categoryId } = req.body;
 
     if (!req.user || !req.user._id) {
+      console.log('❌ Authentication failed: No user in request');
       return res.status(401).json({ 
         success: false, 
         message: 'Authentication required. Please login.' 
       });
     }
 
+    console.log('✅ Authentication verified, fetching buyer...');
     const buyer = await User.findById(req.user._id);
     if (!buyer) {
-      console.log('Buyer not found for ID:', req.user._id);
+      console.log('❌ Buyer not found for ID:', req.user._id);
       return res.status(404).json({ success: false, message: 'Buyer not found' });
     }
 
-    console.log('Buyer found:', buyer.name || buyer.mobileNumber);
+    console.log('✅ Buyer found:', buyer.name || buyer.mobileNumber);
+    console.log('📧 Buyer Email:', buyer.email);
+    console.log('📱 Buyer Mobile:', buyer.mobileNumber);
 
     if (!categoryId) {
       return res.status(400).json({ 
@@ -160,8 +177,13 @@ exports.createLead = async (req, res) => {
       });
     }
 
-    console.log('Total Sqft calculated:', totalSqft);
-    console.log('Total Quantity:', totalQuantity);
+    console.log('\n📊 Quote Processing Summary:');
+    console.log('✅ Total Sqft calculated:', totalSqft);
+    console.log('✅ Total Quantity:', totalQuantity);
+    console.log('✅ Validated Quotes Count:', validatedQuotes.length);
+    validatedQuotes.forEach((q, idx) => {
+      console.log(`  Quote ${idx + 1}: Product=${q.product}, Sqft=${q.sqft}, Qty=${q.quantity}`);
+    });
 
     // Update quotes in database if they have _id (existing quotes)
     if (quotes.some(q => q._id)) {
@@ -218,20 +240,44 @@ exports.createLead = async (req, res) => {
       maxSlots: maxSlots,
       dynamicSlotPrice: dynamicSlotPrice,
       overProfit: overProfit,
+      status: 'new', // Explicitly set status to 'new' to ensure it's visible to sellers
       // pricePerSqft: totalSqft > 0 ? 6250 / (totalSqft * 6) : 0,
     });
 
+    console.log('\n💾 Saving lead to database...');
+    console.log('📊 Lead Status (before save):', lead.status);
+    console.log('🎰 Available Slots (before save):', lead.availableSlots);
+    console.log('📏 Total Sqft (before save):', lead.totalSqft);
+    
     await lead.save();
+    console.log('✅ Lead saved successfully');
+    console.log('📊 Lead Status (after save):', lead.status);
+    console.log('🆔 Lead ID (after save):', lead._id);
 
-    console.log('\n✅ Lead Created Successfully!');
-    console.log('Lead ID:', lead._id);
-    console.log('Buyer:', buyer.name || buyer.mobileNumber);
-    console.log('Total Sqft:', totalSqft);
-    console.log('Available Slots:', lead.availableSlots);
-    console.log('Max Slots:', lead.maxSlots);
-    console.log('Dynamic Slot Price:', lead.dynamicSlotPrice);
-    console.log('Status:', lead.status);
-    console.log('Created At:', lead.createdAt);
+    console.log('\n✅ [BUYER BACKEND] Lead Created Successfully!');
+    console.log('🆔 Lead ID:', lead._id);
+    console.log('👤 Buyer:', buyer.name || buyer.mobileNumber);
+    console.log('📧 Buyer Email:', buyer.email);
+    console.log('📏 Total Sqft:', totalSqft);
+    console.log('📦 Total Quantity:', totalQuantity);
+    console.log('🎰 Available Slots:', lead.availableSlots);
+    console.log('🎰 Max Slots:', lead.maxSlots);
+    console.log('💰 Dynamic Slot Price:', lead.dynamicSlotPrice);
+    console.log('💰 Base Price Per Sqft:', lead.basePricePerSqft);
+    console.log('📊 Status:', lead.status, '(Should be "new" for seller visibility)');
+    console.log('📅 Created At:', lead.createdAt);
+    console.log('📍 Project Address:', projectInfo?.address);
+    console.log('📍 Project Area:', projectInfo?.area);
+    console.log('📍 Pincode:', projectInfo?.pincode);
+    console.log('🏷️ Category ID:', categoryId);
+    console.log('📋 Contact Name:', contactInfo?.name);
+    console.log('📱 Contact Number:', contactInfo?.contactNumber);
+    console.log('📧 Contact Email:', contactInfo?.email);
+    console.log('\n🔍 Lead Visibility Check:');
+    console.log('  ✅ Status is "new":', lead.status === 'new');
+    console.log('  ✅ Has available slots:', lead.availableSlots > 0);
+    console.log('  ✅ Created within last 48h:', true, '(just created)');
+    console.log('  ✅ Should be visible to sellers:', lead.status === 'new' && lead.availableSlots > 0);
     console.log('========================================\n');
 
     res.status(201).json({
@@ -241,8 +287,12 @@ exports.createLead = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('\n❌ Error creating lead:', error);
-    console.error('Error stack:', error.stack);
+    console.error('\n❌ [BUYER BACKEND] Error creating lead');
+    console.error('📅 Timestamp:', new Date().toISOString());
+    console.error('📝 Error Message:', error.message);
+    console.error('📊 Error Name:', error.name);
+    console.error('📦 Error Stack:', error.stack);
+    console.error('🔍 Error Details:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
     console.error('========================================\n');
     res.status(500).json({
       success: false,
@@ -254,13 +304,24 @@ exports.createLead = async (req, res) => {
 
 // Get all leads with filters
 exports.getAllLeads = async (req, res) => {
+  // IMMEDIATE LOG - This will definitely show up
+  console.log('\n');
+  console.log('========================================');
+  console.log('🟢🟢🟢 [SELLER BACKEND] getAllLeads FUNCTION CALLED 🟢🟢🟢');
+  console.log('========================================');
+  console.log('📅 Timestamp:', new Date().toISOString());
+  console.log('📋 Request Query:', JSON.stringify(req.query, null, 2));
+  console.log('👤 Seller from token:', req.seller?._id || 'No seller token (public access)');
+  
   try {
+    
     const { status, buyerId, sellerId, categoryId, page = 1, limit = 100 } = req.query;
     const filter = {};
 
     // Valid status values
     const validStatuses = ['new', 'in-progress', 'closed', 'cancelled'];
     
+    console.log('\n🔍 Building filter criteria...');
     // If status is provided, validate and normalize it
     if (status) {
       const statusMap = {
@@ -271,20 +332,32 @@ exports.getAllLeads = async (req, res) => {
       const normalizedStatus = statusMap[status] || status;
       if (validStatuses.includes(normalizedStatus)) {
         filter.status = normalizedStatus;
+        console.log(`✅ Status filter applied: ${status} -> ${normalizedStatus}`);
+      } else {
+        console.log(`⚠️ Invalid status provided: ${status}, skipping status filter`);
       }
     }
 
-    if (buyerId) filter.buyer = buyerId;
-    if (categoryId) filter.category = categoryId;
-    if (sellerId) filter['seller.sellerId'] = sellerId;
+    if (buyerId) {
+      filter.buyer = buyerId;
+      console.log('✅ Buyer filter applied:', buyerId);
+    }
+    if (categoryId) {
+      filter.category = categoryId;
+      console.log('✅ Category filter applied:', categoryId);
+    }
+    if (sellerId) {
+      filter['seller.sellerId'] = sellerId;
+      console.log('✅ Seller filter applied:', sellerId);
+    }
 
     const pageNum = Math.max(1, parseInt(page, 10) || 1);
     const pageSize = Math.max(1, Math.min(100, parseInt(limit, 10) || 100));
 
-    // Log the filter for debugging
-    console.log('=== getAllLeads API Call ===');
+    console.log('\n📊 Query Parameters:');
     console.log('Filter:', JSON.stringify(filter, null, 2));
     console.log('Page:', pageNum, 'Limit:', pageSize);
+    console.log('Skip:', (pageNum - 1) * pageSize);
 
     // Use lean() to avoid validation errors on invalid status values
     // We'll filter and normalize statuses in the results
@@ -301,17 +374,83 @@ exports.getAllLeads = async (req, res) => {
         .lean(), // Use lean() to get plain objects and avoid validation errors
     ]);
 
-    // Log results for debugging
-    console.log('Total leads found:', total);
-    console.log('Leads returned:', leads.length);
+    console.log('\n📊 Database Query Results:');
+    console.log('✅ Total leads found:', total);
+    console.log('✅ Leads returned in this page:', leads.length);
+    
     if (leads.length > 0) {
-      console.log('Sample lead:', {
-        id: leads[0]._id,
-        availableSlots: leads[0].availableSlots,
-        status: leads[0].status,
-        createdAt: leads[0].createdAt,
-        totalSqft: leads[0].totalSqft
+      console.log('\n📋 Sample Lead Details:');
+      console.log('🆔 Lead ID:', leads[0]._id);
+      console.log('🎰 Available Slots:', leads[0].availableSlots);
+      console.log('📊 Status:', leads[0].status);
+      console.log('📅 Created At:', leads[0].createdAt);
+      console.log('📏 Total Sqft:', leads[0].totalSqft);
+      console.log('👤 Buyer:', leads[0].buyer?.name || leads[0].buyer?._id);
+      console.log('🏷️ Category:', leads[0].category?.name || leads[0].category?._id);
+      console.log('👥 Sellers Count:', leads[0].seller?.length || 0);
+      
+      // Log all leads details
+      console.log('\n📋 All Leads Details:');
+      const now = new Date();
+      const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000);
+      
+      let visibleCount = 0;
+      let filteredOutCount = 0;
+      const filteredReasons = {
+        tooOld: 0,
+        noSlots: 0,
+        wrongStatus: 0
+      };
+      
+      leads.forEach((lead, index) => {
+        const createdAt = new Date(lead.createdAt);
+        const hoursSinceCreation = (now - createdAt) / (1000 * 60 * 60);
+        const isWithin48Hours = createdAt >= fortyEightHoursAgo;
+        const hasAvailableSlots = lead.availableSlots > 0;
+        const statusMatch = lead.status === 'new' || lead.status === 'in-progress';
+        const isVisible = isWithin48Hours && hasAvailableSlots && statusMatch;
+        
+        if (isVisible) {
+          visibleCount++;
+        } else {
+          filteredOutCount++;
+          if (!isWithin48Hours) filteredReasons.tooOld++;
+          if (!hasAvailableSlots) filteredReasons.noSlots++;
+          if (!statusMatch) filteredReasons.wrongStatus++;
+        }
+        
+        console.log(`\n  Lead ${index + 1}:`);
+        console.log(`    🆔 ID: ${lead._id}`);
+        console.log(`    📊 Status: ${lead.status} ${statusMatch ? '✅' : '❌'}`);
+        console.log(`    📅 Created At: ${lead.createdAt}`);
+        console.log(`    ⏰ Hours Since Creation: ${hoursSinceCreation.toFixed(2)}`);
+        console.log(`    ⏰ Within 48 Hours: ${isWithin48Hours ? '✅' : '❌'}`);
+        console.log(`    🎰 Available Slots: ${lead.availableSlots} ${hasAvailableSlots ? '✅' : '❌'}`);
+        console.log(`    📏 Total Sqft: ${lead.totalSqft}`);
+        console.log(`    🎰 Max Slots: ${lead.maxSlots || 'N/A'}`);
+        console.log(`    💰 Dynamic Slot Price: ${lead.dynamicSlotPrice || 'N/A'}`);
+        console.log(`    👥 Sellers Count: ${lead.seller?.length || 0}`);
+        console.log(`    👁️ Visible to Sellers: ${isVisible ? '✅ YES' : '❌ NO'}`);
+        if (!isVisible) {
+          const reasons = [];
+          if (!isWithin48Hours) reasons.push('Too old (>48h)');
+          if (!hasAvailableSlots) reasons.push('No available slots');
+          if (!statusMatch) reasons.push(`Wrong status (${lead.status})`);
+          console.log(`    ❌ Filtered Out Reason: ${reasons.join(', ')}`);
+        }
       });
+      
+      console.log('\n📊 Lead Visibility Summary:');
+      console.log(`  ✅ Visible Leads: ${visibleCount}`);
+      console.log(`  ❌ Filtered Out: ${filteredOutCount}`);
+      if (filteredOutCount > 0) {
+        console.log('  📋 Filter Reasons:');
+        console.log(`    - Too old (>48h): ${filteredReasons.tooOld}`);
+        console.log(`    - No available slots: ${filteredReasons.noSlots}`);
+        console.log(`    - Wrong status: ${filteredReasons.wrongStatus}`);
+      }
+    } else {
+      console.log('⚠️ No leads found matching the criteria');
     }
 
     // Normalize status values in the results
@@ -329,6 +468,15 @@ exports.getAllLeads = async (req, res) => {
       return lead;
     });
 
+    console.log('\n✅ [SELLER BACKEND] Sending response');
+    console.log('📊 Response Summary:');
+    console.log('  Success: true');
+    console.log('  Total Leads: ', total);
+    console.log('  Page: ', pageNum);
+    console.log('  Limit: ', pageSize);
+    console.log('  Count in Response: ', normalizedLeads.length);
+    console.log('========================================\n');
+    
     res.status(200).json({
       success: true,
       total,
@@ -338,7 +486,13 @@ exports.getAllLeads = async (req, res) => {
       leads: normalizedLeads
     });
   } catch (error) {
-    console.error('Error fetching leads:', error);
+    console.error('\n❌ [SELLER BACKEND] Error fetching leads');
+    console.error('📅 Timestamp:', new Date().toISOString());
+    console.error('📝 Error Message:', error.message);
+    console.error('📊 Error Name:', error.name);
+    console.error('📦 Error Stack:', error.stack);
+    console.error('========================================\n');
+    
     res.status(500).json({
       success: false,
       message: 'Internal server error',

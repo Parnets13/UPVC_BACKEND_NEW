@@ -155,6 +155,6 @@ const createTestLead = async () => {
   }
 };
 
-// Run the script
+
 createTestLead();
 
