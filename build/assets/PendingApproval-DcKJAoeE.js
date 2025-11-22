@@ -1,0 +1,1 @@
+import{j as e}from"./index-D1i6b4hD.js";const i=()=>e.jsxs("div",{className:"pending-approval-container",children:[e.jsx("h1",{children:"Pending Approval"}),e.jsx("p",{children:"This screen will be implemented with the same content as the mobile app PendingApproval."})]});export{i as default};

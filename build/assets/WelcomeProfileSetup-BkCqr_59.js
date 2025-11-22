@@ -1,1 +1,0 @@
-import{j as e}from"./index-BvbRJS_t.js";const l=()=>e.jsxs("div",{className:"welcome-profile-setup-container",children:[e.jsx("h1",{children:"Welcome Profile Setup"}),e.jsx("p",{children:"This screen will be implemented with the same content as the mobile app WelcomeProfileSetup."})]});export{l as default};

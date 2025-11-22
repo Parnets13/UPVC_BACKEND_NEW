@@ -91,12 +91,11 @@ exports.updateQuote = async (req, res) => {
       }
     }
 
-    const quote = await Quote.findByIdAndUpdate(
+     const quote = await Quote.findByIdAndUpdate(
       quoteId,
       updateData,
       { new: true, runValidators: true }
     ).populate('product');
-
     if (!quote) {
       return res.status(404).json({ success: false, message: 'Quote not found' });
     }
@@ -200,17 +199,11 @@ exports.convertToLead = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Internal server error',
-      error: error.message
-    });
-  }
-};
-
-
-
-
-
-
-
+      error: error.message  
+    }); 
+  } 
+}; 
+  
 // Add item to cart (quote)
 // exports.addToCart = async (req, res) => {
 //   try {
@@ -277,7 +270,7 @@ exports.convertToLead = async (req, res) => {
 //   }
 // };
 
-exports.addToCart = async (req, res) => {
+   exports.addToCart = async (req, res) => {
   try {
     const { productType, product, color, installationLocation, height, width, quantity, remark } = req.body;
 
@@ -289,8 +282,7 @@ exports.addToCart = async (req, res) => {
         message: 'Product not found' 
       });
     }
-
-    const newItem = {
+     const newItem = {
       productType,
       product,
       color,
@@ -300,7 +292,6 @@ exports.addToCart = async (req, res) => {
       quantity,
       remark
     };
-
     // Find or create cart for buyer, add item
     const cart = await Quote.findOneAndUpdate(
       { buyer: req.user._id },
@@ -311,6 +302,7 @@ exports.addToCart = async (req, res) => {
       { new: true, upsert: true }
     ).populate('items.product');
 
+
     res.status(200).json({
       success: true,
       message: 'Item added to cart',
@@ -318,14 +310,13 @@ exports.addToCart = async (req, res) => {
     });
   } catch (error) {
     console.error('Error adding to cart:', error);
-    res.status(500).json({
+    res.status(500).json({ 
       success: false,
-      message: 'Internal server error',
+      message: 'Internal server error', 
       error: error.message
     });
   }
 };
-
 // Get cart items
 exports.getCart = async (req, res) => {
   try { 
@@ -356,7 +347,6 @@ exports.getCart = async (req, res) => {
     });
   }
 };
-
 // Update cart item
 exports.updateCartItem = async (req, res) => {
   try {
