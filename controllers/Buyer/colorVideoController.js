@@ -12,7 +12,8 @@ const normalizeFilePath = (path) => {
 const createColorVideo = async (req, res) => {
   try {
     const { title, description } = req.body;
-    const file = req.file;
+    // Support both .single() and .fields() - check req.file first, then req.files.color
+    const file = req.file || req.files?.color?.[0];
 
     if (!file) return res.status(400).json({ error: 'Video file is required' });
 
@@ -65,7 +66,8 @@ const updateColorVideo = async (req, res) => {
   try {
     const { title, description, sponsorText } = req.body;
     const videoId = req.params.id;
-    const file = req.file;
+    // Support both .single() and .fields() - check req.file first, then req.files.color
+    const file = req.file || req.files?.color?.[0];
 
     const existing = await ColorVideo.findById(videoId);
     if (!existing) return res.status(404).json({ error: 'Video not found' });

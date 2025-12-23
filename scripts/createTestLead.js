@@ -1,160 +1,89 @@
 const mongoose = require('mongoose');
 const dotenv = require('dotenv');
-const path = require('path');
+dotenv.config();
 
-// Load environment variables
-dotenv.config({ path: path.join(__dirname, '../.env') });
-
-// Import models
 const Lead = require('../models/Admin/lead');
 const User = require('../models/Buyer/User');
 const Category = require('../models/Admin/Category');
 const WindowSubOption = require('../models/Admin/WindowSubOptions');
 
-// Connect to database
-const connectDB = async () => {
+async function createTestLead() {
   try {
-    const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/upvc';
-    await mongoose.connect(mongoUri);
-    console.log('✅ MongoDB Connected to:', mongoUri.replace(/\/\/.*@/, '//***@')); // Hide credentials
-  } catch (error) {
-    console.error('❌ MongoDB connection error:', error);
-    process.exit(1);
-  }
-};
+    await mongoose.connect(process.env.MONGO_URI);
+    console.log('Connected to MongoDB');
 
-const createTestLead = async () => {
-  try {
-    await connectDB();
-
-    console.log('\n=== Creating Test Lead ===\n');
-
-    // Find or create a test buyer
-    let buyer = await User.findOne({ mobileNumber: '9999999999' });
+    // Get first buyer
+    const buyer = await User.findOne();
     if (!buyer) {
-      buyer = await User.create({
-        name: 'Test Buyer',
-        mobileNumber: '9999999999',
-        email: 'testbuyer@example.com'
-      });
-      console.log('✅ Created test buyer:', buyer._id);
-    } else {
-      console.log('✅ Using existing buyer:', buyer._id);
+      console.log('No buyer found. Please create a buyer first.');
+      process.exit(1);
     }
+    console.log('Using buyer:', buyer._id, buyer.name || buyer.email);
 
-    // Find or create a test category
-    let category = await Category.findOne({ name: 'Windows' });
+    // Get first category
+    const category = await Category.findOne();
     if (!category) {
-      category = await Category.create({
-        name: 'Windows',
-        description: 'Test Category for Windows'
-      });
-      console.log('✅ Created test category:', category._id);
-    } else {
-      console.log('✅ Using existing category:', category._id);
+      console.log('No category found. Please create a category first.');
+      process.exit(1);
     }
+    console.log('Using category:', category._id, category.name);
 
-    // Find a product (WindowSubOption)
-    let product = await WindowSubOption.findOne();
+    // Get first product
+    const product = await WindowSubOption.findOne();
     if (!product) {
-      console.log('⚠️  No products found. Creating a minimal product...');
-      // Create a minimal product if none exists
-      product = await WindowSubOption.create({
-        title: 'Test Window Product',
-        features: ['Test Feature 1', 'Test Feature 2']
-      });
-      console.log('✅ Created test product:', product._id);
-    } else {
-      console.log('✅ Using existing product:', product._id, '-', product.title);
+      console.log('No product found. Please create a product first.');
+      process.exit(1);
     }
-
-    // Calculate lead data
-    const height = 60; // inches
-    const width = 36; // inches
-    const quantity = 2;
-    const sqft = (height * width) / 144; // Convert to sqft
-    const totalSqft = sqft * quantity;
-
-    // Calculate dynamic slots and pricing
-    const basePricePerSqft = 10.50;
-    const baseValue = totalSqft * basePricePerSqft;
-    const targetProfit = 6250;
-    
-    let maxSlots, dynamicSlotPrice, overProfit;
-    
-    if (baseValue * 6 > targetProfit) {
-      maxSlots = Math.max(1, Math.floor(targetProfit / baseValue));
-      dynamicSlotPrice = targetProfit / maxSlots;
-      overProfit = true;
-    } else {
-      maxSlots = 6;
-      dynamicSlotPrice = baseValue;
-      overProfit = false;
-    }
+    console.log('Using product:', product._id, product.title);
 
     // Create test lead
-    const testLead = await Lead.create({
+    const lead = new Lead({
       buyer: buyer._id,
+      category: category._id,
       quotes: [{
         productType: 'Window',
         product: product._id,
         color: 'White',
         installationLocation: 'Living Room',
-        height: height,
-        width: width,
-        quantity: quantity,
-        sqft: sqft,
-        isGenerated: true
+        height: 4,
+        width: 3,
+        quantity: 2,
+        sqft: 12,
+        remark: 'Test lead'
       }],
       contactInfo: {
         name: 'Test Buyer',
-        contactNumber: '9999999999',
-        whatsappNumber: '9999999999',
-        email: 'testbuyer@example.com'
+        contactNumber: '9876543210',
+        whatsappNumber: '9876543210',
+        email: 'test@example.com'
       },
       projectInfo: {
         name: 'Test Project',
-        address: '123 Test Street, Test City',
+        address: '123 Test Street',
         area: 'Test Area',
         pincode: '560001',
-        googleMapLink: 'https://maps.google.com',
         stage: 'planning',
         timeline: '0-30 days'
       },
-      category: category._id,
-      totalSqft: totalSqft,
-      totalQuantity: quantity,
-      pricePerSqft: 10.5,
-      basePricePerSqft: basePricePerSqft,
-      availableSlots: maxSlots,
-      maxSlots: maxSlots,
-      dynamicSlotPrice: dynamicSlotPrice,
-      overProfit: overProfit,
-      status: 'new'
+      totalSqft: 24,
+      totalQuantity: 2,
+      status: 'new',
+      availableSlots: 6,
+      maxSlots: 6,
+      dynamicSlotPrice: 315
     });
 
-    console.log('\n✅ Test Lead Created Successfully!');
-    console.log('Lead ID:', testLead._id);
-    console.log('Buyer:', buyer.name);
-    console.log('Total Sqft:', totalSqft);
-    console.log('Available Slots:', testLead.availableSlots);
-    console.log('Max Slots:', testLead.maxSlots);
-    console.log('Dynamic Slot Price:', testLead.dynamicSlotPrice);
-    console.log('Status:', testLead.status);
-    console.log('Created At:', testLead.createdAt);
-    console.log('\n✅ Lead is ready to be displayed in seller dashboard!\n');
+    await lead.save();
+    console.log('\n✅ Test lead created successfully!');
+    console.log('Lead ID:', lead._id);
+    console.log('Status:', lead.status);
+    console.log('Total Sqft:', lead.totalSqft);
 
-    await mongoose.connection.close();
-    console.log('✅ Database connection closed');
     process.exit(0);
-
   } catch (error) {
-    console.error('❌ Error creating test lead:', error);
-    await mongoose.connection.close();
+    console.error('Error:', error.message);
     process.exit(1);
   }
-};
-
+}
 
 createTestLead();
-

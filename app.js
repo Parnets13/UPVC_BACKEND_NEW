@@ -109,8 +109,13 @@ app.use('/api/quotes', require('./routes/Buyer/quoteRoutes'));
 app.use(express.static(path.join(__dirname, 'build')));
 
 // Catch-all handler: send back React's index.html file for any non-API routes
+// Skip /uploads and /api routes
 app.get("*", (req, res) => {
-  return  res.sendFile(path.join(__dirname, 'build', 'index.html'));
+  // Don't serve index.html for upload requests - return 404 instead
+  if (req.path.startsWith('/uploads/')) {
+    return res.status(404).json({ error: 'File not found' });
+  }
+  return res.sendFile(path.join(__dirname, 'build', 'index.html'));
 });
 
 module.exports = app;
